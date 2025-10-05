@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
-import { Notification } from './entities/notification.entity';
-import { NotificationRecipient } from './entities/notification-recipient.entity';
-import { CreateNotificationDto } from './dto/create-notification.dto';
-import { Users } from 'src/users/entities/user.entity';
-import { UpdateNotificationDto } from './dto/update-notification.dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { ILike, Repository } from "typeorm";
+import { Notification } from "./entities/notification.entity";
+import { NotificationRecipient } from "./entities/notification-recipient.entity";
+import { CreateNotificationDto } from "./dto/create-notification.dto";
+import { Users } from "src/users/entities/user.entity";
+import { UpdateNotificationDto } from "./dto/update-notification.dto";
 
 @Injectable()
 export class NotificationsService {
@@ -17,7 +17,7 @@ export class NotificationsService {
     private readonly recipientRepo: Repository<NotificationRecipient>,
 
     @InjectRepository(Users)
-    private readonly userRepo: Repository<Users>,
+    private readonly userRepo: Repository<Users>
   ) {}
 
   // Create notification and assign to all students
@@ -28,14 +28,14 @@ export class NotificationsService {
     await this.notificationRepo.save(notification);
 
     // Fetch all students
-    const students = await this.userRepo.find({ where: { role: 'student' } });
+    const students = await this.userRepo.find({ where: { role: "student" } });
 
     // Create recipients
     const recipients = students.map((student) =>
       this.recipientRepo.create({
         notificationId: notification.notification_id,
         studentId: student.id,
-      }),
+      })
     );
     await this.recipientRepo.save(recipients);
 
@@ -45,23 +45,80 @@ export class NotificationsService {
     };
   }
 
-  // Get all notifications for a student
-  async getAll() {
-    return this.notificationRepo.find({
-      order: { created_at: 'DESC' },
+  // Get all notifications with optional pagination
+  async getAll(page?: number, limit?: number) {
+    const take = limit;
+    const skip = page && limit ? (page - 1) * limit : undefined;
+
+    if (take && skip !== undefined) {
+      const [data, total] = await this.notificationRepo.findAndCount({
+        order: { created_at: "DESC" },
+        take,
+        skip,
+      });
+
+      return {
+        data,
+        total,
+        page,
+        totalPages: Math.ceil(total / take),
+      };
+    }
+
+    // No pagination, return all
+    const data = await this.notificationRepo.find({
+      order: { created_at: "DESC" },
     });
+
+    return {
+      data,
+      total: data.length,
+      page: 1,
+      totalPages: 1,
+    };
   }
 
-  async searchNotification(query: string) {
-    const noticeSearch = await this.notificationRepo.find({
+  // Search notifications with optional pagination
+  async searchNotification(query: string, page?: number, limit?: number) {
+    const take = limit;
+    const skip = page && limit ? (page - 1) * limit : undefined;
+
+    if (take && skip !== undefined) {
+      const [data, total] = await this.notificationRepo.findAndCount({
+        where: [
+          { title: ILike(`%${query}%`) },
+          { message: ILike(`%${query}%`) },
+          { sendTo: ILike(`%${query}%`) },
+        ],
+        order: { created_at: "DESC" },
+        take,
+        skip,
+      });
+
+      return {
+        data,
+        total,
+        page,
+        totalPages: Math.ceil(total / take),
+      };
+    }
+
+    // No pagination
+    const data = await this.notificationRepo.find({
       where: [
         { title: ILike(`%${query}%`) },
         { message: ILike(`%${query}%`) },
         { sendTo: ILike(`%${query}%`) },
       ],
+      order: { created_at: "DESC" },
     });
 
-    return noticeSearch;
+    return {
+      data,
+      total: data.length,
+      page: 1,
+      totalPages: 1,
+    };
   }
 
   // Get all notifications for a student
@@ -83,8 +140,8 @@ export class NotificationsService {
   async getForUser(userId: string) {
     return this.recipientRepo.find({
       where: { studentId: userId },
-      relations: ['notification'],
-      order: { id: 'DESC' },
+      relations: ["notification"],
+      order: { id: "DESC" },
     });
   }
 
@@ -92,8 +149,8 @@ export class NotificationsService {
   async getUnreadForUser(userId: string) {
     return this.recipientRepo.find({
       where: { studentId: userId, isRead: false },
-      relations: ['notification'],
-      order: { id: 'DESC' },
+      relations: ["notification"],
+      order: { id: "DESC" },
     });
   }
 
@@ -108,7 +165,7 @@ export class NotificationsService {
   async markAsRead(notificationId: string, studentId: string) {
     return this.recipientRepo.update(
       { notificationId, studentId },
-      { isRead: true, readAt: new Date() },
+      { isRead: true, readAt: new Date() }
     );
   }
 
@@ -116,7 +173,7 @@ export class NotificationsService {
   async markAllAsRead(studentId: string) {
     return this.recipientRepo.update(
       { studentId, isRead: false },
-      { isRead: true, readAt: new Date() },
+      { isRead: true, readAt: new Date() }
     );
   }
 }
